@@ -1,0 +1,11 @@
+# Screensaver keyboard
+# http://askubuntu.com/questions/65059/how-to-embed-on-screen-keyboard-into-gnome-screensaver-3-x-unlock-screen
+
+# Detect hardware changes in python
+# http://ubuntuforums.org/showthread.php?t=904706
+
+# Accessability keyboard toggle
+# https://ask.fedoraproject.org/en/question/54025/modify-dconf-settings-of-active-user-from-root-shell/
+
+
+
