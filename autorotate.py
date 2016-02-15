@@ -1,8 +1,25 @@
 #!/usr/bin/env python2
-import time
-import os
-import subprocess
-import sys
+# -*- coding: utf-8
+import time, os, subprocess, sys, re
+from xdg import BaseDirectory
+
+# Globals
+touchscreen = 'FTSC1000:00 2808:5012'
+pen = "Wacom HID 104 Pen stylus"
+eraser = "Wacom HID 104 Pen eraser"
+keyboard_device_name = 'HID 0911:2188'
+builtin_screen = "eDP1"
+builtin_devices = [touchscreen, pen, eraser]
+ignore_devices = ['Virtual core XTEST pointer']
+
+# Checks per second
+poll_frequency = 2
+# wait seconds before rotate
+rotate_delay = 2
+# emit debug messages
+debug = False
+# don't make changes to system
+test = False
 
 
 def read_file(path): #self.filename
@@ -16,205 +33,211 @@ def read_file(path): #self.filename
     myDatei.close()
     return(myList)
 
-
 def write_file(path, myList): #self.filename
     myDatei = open(path, "w")
     #Liste aus Datei erstelle
     myDatei.writelines(myList)
     myDatei.close()
 
-
 def disable_touch():
     command = 'xinput disable "{0}"'.format(touchscreen)
     os.system(command)
 
-
 def enable_touch():
-    command = 'xinput enable "{0}"'.format(touchscreen)
+    command = 'xinput enable "{0}"'.format(rotation)
     os.system(command)
-
 
 def refresh_touch():
     disable_touch()
     enable_touch()
 
 
-def check_displays():
-    check_displays = "xrandr | grep -w 'connected'"
-    str_displays = str(subprocess.check_output(check_displays, shell=True).lower().rstrip())
-    list_displays = str_displays.splitlines()
-    int_displays = len(list_displays)
+def get_subpixel_values(rotation):
+    matrix = [
+        ["rgb", "bgr", "vbgr", "vrgb"],
+        ["bgr", "rgb", "vrgb", "vbgr"],
+        ["vbgr", "vrgb", "rgb", "bgr"],
+        ["vrgb", "vbgr", "bgr", "rgb"]
+    ]
 
-    return int_displays
+    output = subprocess.check_output(['xfconf-query','-c','xsettings','-p','/Xft/RGBA'])
 
+    i = matrix[rotation].index(output.strip())
+    return matrix[i]
+
+def get_rotation_state():
+    output = subprocess.check_output(['xrandr','-q'])
+
+    match = re.search(
+        re.escape(builtin_screen) + '\s+\w+\s+\d+x\d+\+\d+\+\d+\s+(|inverted|right|left)\s*\(',
+        output
+    )
+
+    if match != None:
+        current = 'normal' if match.group(1) == '' else match.group(1)
+
+        return rotation_list.index(current)
+    else:
+        return 0
+
+def get_pointer_devices():
+    output = subprocess.check_output(['xinput','list'])
+    wacom_devices = []
+    evdev_devices = []
+    other_devices = []
+
+    for dev in device_matcher.finditer(output):
+        if dev.group(1) in ignore_devices: continue
+        if dev.group(1) in builtin_devices: continue
+
+        output = subprocess.check_output(['xinput','list-props', dev.group(2)])
+
+        if wacom_matcher.search(output) != None:
+            wacom_devices.append(dev.group(2))
+        elif evdev_matcher.search(output) != None:
+            evdev_devices.append(dev.group(2))
+        else:
+            other_devices.append(dev.group(2))
+
+    return wacom_devices, evdev_devices, other_devices
 
 def find_accelerometer():
-    count = 0
-    partial_iio_path = '/sys/bus/iio/devices/iio:device'
-    accelerometer_file_proof = 'in_accel_scale'
+    partial_iio_path = '/sys/bus/iio/devices'
 
-    while count <= 9:
-        iio_path = partial_iio_path + str(count)
-        proof_path = iio_path + '/' + accelerometer_file_proof
+    if os.path.exists(partial_iio_path):
+        for iio_device in os.listdir(partial_iio_path):
+            if os.path.exists(partial_iio_path + '/' + iio_device + '/in_accel_scale'):
+                return partial_iio_path + '/' + iio_device
+    return None
 
-        if os.path.exists(proof_path) == True:
-            return iio_path, proof_path # directory of accelerometer device (iio), and accelerometer file
-            break
+def rotate_screen(rotation):
+    if rotation_list[rotation] == None: return
 
-        count = count + 1
+    rotate_screen = "xrandr  --output {1} --rotate {0}"
+    rotate_builtin = 'xinput map-to-output "{0}" {1}'
+    rotate_wacom = "xinput set-prop {0} 'Wacom Rotation' {1}"
+    rotate_evdev = "xinput set-prop {0} 'Evdev Axis Inversion' {1}; xinput set-prop {0} 'Evdev Axes Swap' {2}"
+    rotate_other = "xinput set-prop {0} 'Coordinate Transformation Matrix' '{1}'"
+    rotate_subpixel = "xfconf-query -c xsettings -p /Xft/RGBA -s {0}"
 
-
-def rotate_screen(orientation):
-    rotate_screen_commands = "xrandr -o {0}; xinput set-prop '{1}' 'Coordinate Transformation Matrix' {3}; xinput set-prop '{2}' 'Coordinate Transformation Matrix' {3};"
-       
-    if orientation == 'inverted':
+    if rotation == 1:
         matrix = '-1 0 1 0 -1 1 0 0 1'
+        wacom = 3
+        evdev = (0, '1 1')
 
-    elif orientation == 'right':
+    elif rotation == 2:
         matrix = '0 1 0 -1 0 1 0 0 1'
+        wacom = 1
+        evdev = (1, '0 1')
 
-    elif orientation == 'left':
+    elif rotation == 3:
         matrix = '0 -1 1 1 0 0 0 0 1'
+        wacom = 2
+        evdev = (1, '1 0')
 
-    elif orientation == 'normal':
+    else:
         matrix = '1 0 0 0 1 0 0 0 1'
+        wacom = 0
+        evdev = (0, '0 0')
 
-    rotate_screen_commands = rotate_screen_commands.format(orientation, touchscreen, pen, matrix)
-    os.system(rotate_screen_commands)
+    wacom_devices, evdev_devices, other_devices = get_pointer_devices()
 
-    refresh_touch()
+    rotate_commands = []
+    rotate_commands.append(rotate_screen.format(rotation_list[rotation], builtin_screen))
 
-# Globals
-touchscreen = 'NTRG0001:01 1B96:1B05'
-pen = "{0} Pen".format(touchscreen)
-state_dict = {0: "normal", 1: "inverted", 2: "right", 3: "left"}
-device_path, accelerometer_path = find_accelerometer()
+    for dev in builtin_devices:
+        rotate_commands.append(rotate_builtin.format(dev, builtin_screen))
 
+    for dev in wacom_devices:
+        rotate_commands.append(rotate_wacom.format(dev, wacom))
+
+    for dev in evdev_devices:
+        rotate_commands.append(rotate_evdev.format(dev, evdev[1], evdev[0]))
+
+    for dev in other_devices:
+        rotate_commands.append(rotate_other.format(dev, matrix))
+
+    rotate_commands.append(rotate_subpixel.format(subpixel_values[rotation]))
+
+    for cmd in rotate_commands:
+        ret = None
+        if not test: ret = os.system(cmd)
+        if debug: print("Command: '{0}', result = {1}".format(cmd, ret))
+
+    # refresh_touch()
 
 # Config
-debug = False
-path = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
-freq = 1 # Checks per second
-
+rotation_list = ["normal", "inverted", "right", "left"]
+device_matcher = re.compile('^.+?\\b(.+?)\\b\s+id=(\d+)\s+\[slave\s+pointer\s+\(\d+\)\]$', re.M)
+wacom_matcher = re.compile('Wacom Rotation\s*\(\d+\):\s+\d', re.I)
+evdev_matcher = re.compile('Evdev Axis Inversion\s*\(\d+\):\s+\d,\s*\d', re.I)
+value_ignore = 3
+value_accept = 6
 
 # Initialization
-current_state = 0
-previous_tstate = "on"
-previousStylusProximityStatus = "out"
-firstrun = True
+accelerometer_path = find_accelerometer()
+prev_state = current_state = get_rotation_state()
+subpixel_values = get_subpixel_values(current_state)
+rotate_delay_initial = rotate_delay = rotate_delay * poll_frequency
 
+if not os.path.exists(BaseDirectory.xdg_config_home + '/tablet-scripts/'):
+    if debug: print ('creating config directory')
+    os.mkdir(BaseDirectory.xdg_config_home + '/tablet-scripts/')
+
+if debug:
+    print ('Current rotation: {0}'.format(rotation_list[current_state]))
+    print ('Subpixel values list: {0}'.format(subpixel_values))
 
 # Accelerometer
-with open(accelerometer_path) as f:
+scale = 1
+with open(accelerometer_path + '/in_accel_scale', 'r') as f:
     scale = float(f.readline())
 
+if debug:
+    silence = false
+    print ('Scale factor: %f' % (scale))
 
 while True:
-    multimonitor = False
-    int_displays = check_displays()
+    time.sleep(1.0/poll_frequency)
+    enable_rotation = not os.path.exists(BaseDirectory.xdg_config_home + '/tablet-scripts/disable-autorotate'):
 
-    if int_displays > 1:
-        multimonitor = True
+    # has_keyboard_dock_command = 'xinput --list | grep "{0}" | wc -l'.format(keyboard_device_name)
+    # has_keyboard_dock = int(subprocess.check_output(has_keyboard_dock_command, shell=True))
 
-    time.sleep(1.0/freq)
-    previous_state = current_state
-    status = read_file(os.path.join(path, 'status.txt'))
+    if !enable_rotation:
+        if debug and not silence:
+            print ('autorotation disabled')
+            silence = true
+        continue
+    elif debug:
+        silence = false
 
-    has_keyboard_dock_command = 'xinput --list | grep "Microsoft Surface Type Cover Keyboard" | wc -l'
-    has_keyboard_dock = int(subprocess.check_output(has_keyboard_dock_command, shell=True))
+    with open(accelerometer_path + '/' + 'in_accel_x_raw', 'r') as fx:
+        with open(accelerometer_path + '/' + 'in_accel_y_raw', 'r') as fy:
+            thex = float(fx.readline()) * scale
+            they = float(fy.readline()) * scale
 
-    if str(status[0]) == "on" and multimonitor == False and has_keyboard_dock < 1:
-        with open(device_path + '/' + 'in_accel_x_raw', 'r') as fx:
-            with open(device_path + '/' + 'in_accel_y_raw', 'r') as fy:
-                with open(device_path + '/' + 'in_accel_z_raw', 'r') as fz:
-                    thex = float(fx.readline())
-                    they = float(fy.readline())
-                    thez = float(fz.readline())
+    # normal and inverted
+    if (abs(thex) < value_ignore):
+        if (they < -value_accept):
+            current_state = 0
+        if (they > value_accept):
+            current_state = 1
+    # left and right
+    if (abs(they) < value_ignore):
+        if (thex > value_accept):
+            current_state = 2
+        if (thex < -value_accept):
+            current_state = 3
 
-                    if check_displays() == 1:
-                        if (thex >= 65000 or thex <= 650):
-                            if (they <= 65000 and they >= 64000):
-                                current_state = 0
-                            if (they >= 650 and they <= 1100):
-                                current_state = 1
-                        if (thex <= 64999 and thex >= 650):
-                            if (thex >= 64500 and thex <=64700):
-                                current_state = 2
-                            if (thex >= 800 and thex <= 1000):
-                                current_state = 3
+    if debug: print("x: %-f.1\ty: %-f.1\tcs: %d" % (thex, they, current_state))
 
-                        #cmd = 'sudo chvt 8'
-                        #cmd_result = subprocess.check_output(cmd, shell=True)
+    if current_state != prev_state:
+        if rotate_delay > 0:
+            rotate_delay -= 1
+        else:
+            prev_state = current_state
+            rotate_delay = rotate_delay_initial
 
-        if debug:
-            os.system('clear')
-
-            print("ExtDi: " + str(multimonitor))
-            print("A-ROT: " + status[0])
-            print("    x: " + str(thex))
-            print("    y: " + str(they))
-            print("    z: " + str(thez))
-            print("  POS: " + state_dict[current_state])
-    
-    else:
-        #cmd = 'sudo chvt 7'
-        #cmd_result = subprocess.check_output(cmd, shell=True)
-        pass
-    
-    if (status[0] == "off" or multimonitor == True) and debug:
-        os.system('clear')
-
-        print("ExtDi: " + str(multimonitor))
-        print("A-ROT: " + status[0])
-        print("    x: " + status[0])
-        print("    y: " + status[0])
-        print("    z: " + status[0])
-        print("  POS: " + state_dict[previous_state])
-
-    if current_state != previous_state:
-        rotate_screen(state_dict[current_state])
-
-        if debug:
-            print "Touchscreen refreshed"
-
-    if debug:
-        print("##########################")
-
-
-    #SCREEN
-    stylusProximityCommand = 'xinput query-state "{0}" | grep Proximity | cut -d " " -f3 | cut -d "=" -f2'.format(pen)
-    stylusProximityStatus = str(subprocess.check_output(stylusProximityCommand, shell=True).lower().rstrip())
-    tstatus = read_file(os.path.join(path, 'touch.txt'))
-
-
-    #TOUCHSCREEN
-    if str(tstatus[0]) == "on" and stylusProximityStatus == "out":
-        enable_touch()
-        print("TOUCH: " + tstatus[0])
-
-    elif str(tstatus[0]) == "off" and stylusProximityStatus == "out":
-        disable_touch()
-        print("TOUCH: " + tstatus[0])
-
-
-    previous_tstate = str(tstatus[0])
-
-
-    #PEN
-    if str(tstatus[0]) == "off" and stylusProximityStatus == "in":
-        if debug:
-            print("TOUCH: " + tstatus[0])
-            print("  PEN: " + stylusProximityStatus)
-
-    elif str(tstatus[0]) == "on" and stylusProximityStatus == "in" and firstrun == False:
-        disable_touch() 
-
-        if debug:
-            print("TOUCH: " + "off")
-            print("  PEN: " + stylusProximityStatus)
-
-    elif stylusProximityStatus == "out":
-        firstrun == False
-
-        if debug:
-            print("  PEN: " + stylusProximityStatus)
+            if debug: print("Rotate to: {0}".format(rotation_list[current_state]))
+            rotate_screen(current_state)
