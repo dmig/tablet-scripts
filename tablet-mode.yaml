@@ -1,0 +1,13 @@
+variables:
+    debug: false
+    test: false
+    dock_rotation: normal
+
+dock_devices:
+    - HID 0911:2188
+
+commands_dock:
+    - dbus-send --type=method_call --dest=org.onboard.Onboard /org/onboard/Onboard/Keyboard org.onboard.Onboard.Keyboard.Hide
+commands_undock:
+    - onboard
+    #- dbus-send --type=method_call --dest=org.onboard.Onboard /org/onboard/Onboard/Keyboard org.onboard.Onboard.Keyboard.Show
