@@ -192,7 +192,7 @@ with open(accelerometer_path + '/in_accel_scale', 'r') as f:
     scale = float(f.readline())
 
 if debug:
-    silence = false
+    silence = False
     print ('Scale factor: {0}'.format(scale))
 
 while True:
@@ -214,10 +214,10 @@ while True:
     if not enable_rotation:
         if debug and not silence:
             print ('autorotation disabled')
-            silence = true
+            silence = True
         continue
     elif debug:
-        silence = false
+        silence = False
 
     with open(accelerometer_path + '/' + 'in_accel_x_raw', 'r') as fx:
         with open(accelerometer_path + '/' + 'in_accel_y_raw', 'r') as fy:
