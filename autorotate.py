@@ -21,37 +21,6 @@ debug = False
 # don't make changes to system
 test = False
 
-
-def read_file(path): #self.filename
-    myDatei = open(path, "r")
-    myList = []
-    #Liste aus Datei erstellen
-    for Line in myDatei:
-        Line = Line.rstrip()
-        #Line = Line.decode('utf8')
-        myList.append(Line)
-    myDatei.close()
-    return(myList)
-
-def write_file(path, myList): #self.filename
-    myDatei = open(path, "w")
-    #Liste aus Datei erstelle
-    myDatei.writelines(myList)
-    myDatei.close()
-
-def disable_touch():
-    command = 'xinput disable "{0}"'.format(touchscreen)
-    os.system(command)
-
-def enable_touch():
-    command = 'xinput enable "{0}"'.format(rotation)
-    os.system(command)
-
-def refresh_touch():
-    disable_touch()
-    enable_touch()
-
-
 def get_subpixel_values(rotation):
     matrix = [
         ["rgb", "bgr", "vbgr", "vrgb"],
@@ -204,7 +173,7 @@ while True:
     # has_keyboard_dock_command = 'xinput --list | grep "{0}" | wc -l'.format(keyboard_device_name)
     # has_keyboard_dock = int(subprocess.check_output(has_keyboard_dock_command, shell=True))
 
-    if !enable_rotation:
+    if not enable_rotation:
         if debug and not silence:
             print ('autorotation disabled')
             silence = true
