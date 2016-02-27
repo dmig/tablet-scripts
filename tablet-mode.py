@@ -34,7 +34,7 @@ v = config['variables'] if 'variables' in config else {}
 debug = v['debug'] if 'debug' in v else False
 # don't make changes to system
 test = v['test'] if 'test' in v else False
-orientation = v['orientation'] if 'orientation' in v else 'normal'
+orientation = v['dock_rotation'] if 'dock_rotation' in v else None
 commands_dock = config['commands_dock'] if 'commands_dock' in config else []
 commands_undock = config['commands_undock'] if 'commands_undock' in config else []
 del config
@@ -53,7 +53,7 @@ monitor.filter_by(subsystem='input')
 def execute_list(lst):
     for cmd in lst:
         if len(cmd) == 0: continue
-        
+
         ret = None
         if not test:
             ret = os.system(cmd)
@@ -68,7 +68,7 @@ def action_undock():
         if debug: print ('creating config directory')
         os.mkdir(home_config_directory)
     open(home_config_directory + 'disable-autorotate', 'a').close()
-    with open(home_config_directory + 'rotate-to', 'w') as f: f.write(orientation)
+    if orientation != None: with open(home_config_directory + 'rotate-to', 'w') as f: f.write(orientation)
     execute_list(commands_undock)
 
 def action_dock():
