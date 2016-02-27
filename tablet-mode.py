@@ -68,7 +68,8 @@ def action_undock():
         if debug: print ('creating config directory')
         os.mkdir(home_config_directory)
     open(home_config_directory + 'disable-autorotate', 'a').close()
-    if orientation != None: with open(home_config_directory + 'rotate-to', 'w') as f: f.write(orientation)
+    if orientation != None:
+        with open(home_config_directory + 'rotate-to', 'w') as f: f.write(orientation)
     execute_list(commands_undock)
 
 def action_dock():

@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8
-import time, os, subprocess, sys, re
+import time, os, subprocess, re, yaml
 from xdg import BaseDirectory
 
 home_config_directory = BaseDirectory.xdg_config_home + '/tablet-scripts/'
