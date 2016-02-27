@@ -60,26 +60,32 @@ def execute_list(lst):
         if debug:
             print "executed ({1}): {0}".format(cmd, ret)
 
-
-def action_undock():
-    if debug: print "no dock devices"
+def action_dock():
+    if debug: print "dock devices present"
     # autorotation disable and force rotation
     if not os.path.exists(home_config_directory):
         if debug: print ('creating config directory')
         os.mkdir(home_config_directory)
+    if debug: print ('touch disable-autorotate')
     open(home_config_directory + 'disable-autorotate', 'a').close()
     if orientation != None:
+        if debug: print ('force rotation: {0}'.format(orientation))
         with open(home_config_directory + 'rotate-to', 'w') as f: f.write(orientation)
-    execute_list(commands_undock)
+    execute_list(commands_dock)
 
-def action_dock():
-    if debug: print "dock devices present"
+def action_undock():
+    if debug: print "no dock devices"
     # autorotation enable
     if os.path.exists(home_config_directory + 'disable-autorotate'):
+        if debug: print ('enable autorotate')
         os.unlink(home_config_directory + 'disable-autorotate')
     if os.path.exists(home_config_directory + 'rotate-to'):
+        if debug: print ('unforce rotation')
         os.unlink(home_config_directory + 'rotate-to')
-    execute_list(commands_dock)
+    execute_list(commands_undock)
+
+if len(dock_devices_present) > 0: action_dock()
+else: action_undock()
 
 # main cycle
 for device in iter(monitor.poll, None):
