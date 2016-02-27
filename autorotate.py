@@ -4,24 +4,43 @@ import time, os, subprocess, sys, re
 from xdg import BaseDirectory
 
 home_config_directory = BaseDirectory.xdg_config_home + '/tablet-scripts/'
+config = None
+config_files = [home_config_directory + 'autorotate.yaml', 'autorotate.yaml']
+for c in config_files:
+    if os.path.exists(c):
+        config = c
+        break
+
+if config == None:
+    print "Configuration file autorotate.yaml doesn't exist"
+    exit(1)
+
+try:
+    config = yaml.load(file(config, 'r'))
+    for s in ['builtin_devices', 'builtin_screen']:
+        if not s in config:
+            print 'Error in configuration file: `{0}` not specified'.format(s)
+            exit(2)
+except yaml.YAMLError, exc:
+    print "Error in configuration file:", exc
+    exit(2)
 
 # Globals
-touchscreen = 'FTSC1000:00 2808:5012'
-pen = "Wacom HID 104 Pen stylus"
-eraser = "Wacom HID 104 Pen eraser"
-keyboard_device_name = 'HID 0911:2188'
-builtin_screen = "eDP1"
-builtin_devices = [touchscreen, pen, eraser]
-ignore_devices = ['Virtual core XTEST pointer']
+builtin_screen = config['builtin_screen']
+builtin_devices = config['builtin_devices']
+ignore_devices = config['ignore_devices'] if 'ignore_devices' in config else []
 
+v = config['variables'] if 'variables' in config else {}
 # Checks per second
-poll_frequency = 2
+poll_frequency = v['poll_frequency'] if 'poll_frequency' in v else 2
 # wait seconds before rotate
-rotate_delay = 2
+rotate_delay = v['rotate_delay'] if 'rotate_delay' in v else 2
 # emit debug messages
-debug = False
+debug = v['debug'] if 'debug' in v else False
 # don't make changes to system
-test = False
+test = v['test'] if 'test' in v else False
+
+del v, config
 
 def get_subpixel_values(rotation):
     matrix = [
