@@ -3,6 +3,8 @@
 import time, os, subprocess, sys, re
 from xdg import BaseDirectory
 
+home_config_directory = BaseDirectory.xdg_config_home + '/tablet-scripts/'
+
 # Globals
 touchscreen = 'FTSC1000:00 2808:5012'
 pen = "Wacom HID 104 Pen stylus"
@@ -31,8 +33,12 @@ def get_subpixel_values(rotation):
 
     output = subprocess.check_output(['xfconf-query','-c','xsettings','-p','/Xft/RGBA'])
 
-    i = matrix[rotation].index(output.strip())
-    return matrix[i]
+    i = output.strip()
+    if i in matrix[rotation]:
+        i = matrix[rotation].index(i)
+        return matrix[i]
+    else:
+        return None
 
 def get_rotation_state():
     output = subprocess.check_output(['xrandr','-q'])
@@ -82,6 +88,10 @@ def find_accelerometer():
 def rotate_screen(rotation):
     if rotation_list[rotation] == None: return
 
+    subpixel_values = get_subpixel_values(prev_state)
+    if debug:
+        print ('Subpixel values list: {0}'.format(subpixel_values))
+
     rotate_screen = "xrandr  --output {1} --rotate {0}"
     rotate_builtin = 'xinput map-to-output "{0}" {1}'
     rotate_wacom = "xinput set-prop {0} 'Wacom Rotation' {1}"
@@ -126,7 +136,8 @@ def rotate_screen(rotation):
     for dev in other_devices:
         rotate_commands.append(rotate_other.format(dev, matrix))
 
-    rotate_commands.append(rotate_subpixel.format(subpixel_values[rotation]))
+    if subpixel_values != None:
+        rotate_commands.append(rotate_subpixel.format(subpixel_values[rotation]))
 
     for cmd in rotate_commands:
         ret = None
@@ -140,22 +151,21 @@ rotation_list = ["normal", "inverted", "right", "left"]
 device_matcher = re.compile('^.+?\\b(.+?)\\b\s+id=(\d+)\s+\[slave\s+pointer\s+\(\d+\)\]$', re.M)
 wacom_matcher = re.compile('Wacom Rotation\s*\(\d+\):\s+\d', re.I)
 evdev_matcher = re.compile('Evdev Axis Inversion\s*\(\d+\):\s+\d,\s*\d', re.I)
+# TODO test and change values to appropriate
 value_ignore = 3
 value_accept = 6
 
 # Initialization
 accelerometer_path = find_accelerometer()
 prev_state = current_state = get_rotation_state()
-subpixel_values = get_subpixel_values(current_state)
 rotate_delay_initial = rotate_delay = rotate_delay * poll_frequency
 
-if not os.path.exists(BaseDirectory.xdg_config_home + '/tablet-scripts/'):
+if not os.path.exists(home_config_directory):
     if debug: print ('creating config directory')
-    os.mkdir(BaseDirectory.xdg_config_home + '/tablet-scripts/')
+    os.mkdir(home_config_directory)
 
 if debug:
     print ('Current rotation: {0}'.format(rotation_list[current_state]))
-    print ('Subpixel values list: {0}'.format(subpixel_values))
 
 # Accelerometer
 scale = 1
@@ -164,14 +174,23 @@ with open(accelerometer_path + '/in_accel_scale', 'r') as f:
 
 if debug:
     silence = false
-    print ('Scale factor: %f' % (scale))
+    print ('Scale factor: {0}'.format(scale))
 
 while True:
     time.sleep(1.0/poll_frequency)
-    enable_rotation = not os.path.exists(BaseDirectory.xdg_config_home + '/tablet-scripts/disable-autorotate'):
+    enable_rotation = not os.path.exists(home_config_directory + 'disable-autorotate')
+    force_rotation = None
+    if os.path.exists(home_config_directory + 'rotate-to'):
+        with open(home_config_directory + 'rotate-to', 'r') as f:
+            force_rotation = f.readline()
+            if not force_rotation in rotation_list: force_rotation = None
+        os.unlink(home_config_directory + 'rotate-to')
 
-    # has_keyboard_dock_command = 'xinput --list | grep "{0}" | wc -l'.format(keyboard_device_name)
-    # has_keyboard_dock = int(subprocess.check_output(has_keyboard_dock_command, shell=True))
+    if force_rotation != None:
+        current_state = rotation_list.index(force_rotation)
+        if debug: print("Forced rotate to: {0}".format(rotation_list[current_state]))
+        rotate_screen(current_state)
+        prev_state = current_state
 
     if not enable_rotation:
         if debug and not silence:
@@ -205,8 +224,8 @@ while True:
         if rotate_delay > 0:
             rotate_delay -= 1
         else:
-            prev_state = current_state
             rotate_delay = rotate_delay_initial
 
             if debug: print("Rotate to: {0}".format(rotation_list[current_state]))
             rotate_screen(current_state)
+            prev_state = current_state
