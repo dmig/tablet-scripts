@@ -6,11 +6,6 @@ variables:
 
 builtin_screen: eDP1
 
-pen_devices:
-    - Wacom HID 104 Pen stylus
-    - Wacom HID 104 Pen eraser
-touchscreen_devices:
-    - FTSC1000:00 2808:5012
 builtin_devices:
     - FTSC1000:00 2808:5012
     - Wacom HID 104 Pen stylus
