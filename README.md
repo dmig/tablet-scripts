@@ -110,9 +110,48 @@ Start script:
 $ tablet-mode.py
 ```
 
+touch-disable.py
+================
+
+Simple script for enabling/disabling touchscreen depending on pen proximity. Useful, if you often touch the screen with your palm when using pen. This one is most cpu intensive, so don't run, if you don't really need it.
+
+Configuration
+-----
+Edit configuration file `~/.config/tablet-scripts/touch-disable.yaml`, specify your devices there:
+```yaml
+variables:
+    # print debug messages
+    debug: false
+    # do nothing, just print, what would be done
+    test: false
+    # frequency of devices state polling
+    poll_frequency: 2 # times per second
+    # delay before enable back touchscreen
+    enable_delay: 1 # seconds
+
+# devices, to look for
+# look for them using xinput list
+
+# these are your pen input devices, script will check for pen proximity on them
+pen_devices:
+    - Wacom HID 104 Pen stylus
+    - Wacom HID 104 Pen eraser
+# these are your touch input devices, script will control them
+touchscreen_devices:
+    - FTSC1000:00 2808:5012
+```
+
+Usage
+-----
+Start script:
+```
+$ touch-disable.py
+```
+
 TODO
 ====
 * Complete error handling
 * Get/set Xft.RGBA in less desktop-specific way (lib binging maybe?)
 * Webcam rotation (if ever possible)
 * Reduce number of subprocess calls by using bindings to xrandr (https://github.com/alexer/python-xlib/blob/master/examples/xrandr.py) and xinput
+* Find a way to determine pen proximity without subprocess calls

@@ -1,0 +1,11 @@
+variables:
+    poll_frequency: 2
+    enable_delay: 1
+    debug: False
+    test: False
+
+pen_devices:
+    - Wacom HID 104 Pen stylus
+    - Wacom HID 104 Pen eraser
+touchscreen_devices:
+    - FTSC1000:00 2808:5012
