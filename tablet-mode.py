@@ -34,6 +34,7 @@ v = config['variables'] if 'variables' in config else {}
 debug = v['debug'] if 'debug' in v else False
 # don't make changes to system
 test = v['test'] if 'test' in v else False
+debounce_delay = v['mode_delay'] if 'mode_delay' in v else False
 orientation = v['dock_rotation'] if 'dock_rotation' in v else None
 commands_dock = config['commands_dock'] if 'commands_dock' in config else []
 commands_undock = config['commands_undock'] if 'commands_undock' in config else []
@@ -61,6 +62,8 @@ def execute_list(lst):
             print "executed ({1}): {0}".format(cmd, ret)
 
 def action_dock():
+    if(debounce_delay) time.sleep(debounce_delay)
+    if len(dock_devices_present) = 0: return
     if debug: print "dock devices present"
     # autorotation disable and force rotation
     if not os.path.exists(home_config_directory):
@@ -74,6 +77,8 @@ def action_dock():
     execute_list(commands_dock)
 
 def action_undock():
+    if(debounce_delay) time.sleep(debounce_delay)
+    if len(dock_devices_present) > 0: return
     if debug: print "no dock devices"
     # autorotation enable
     if os.path.exists(home_config_directory + 'disable-autorotate'):

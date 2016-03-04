@@ -86,6 +86,8 @@ variables:
     # force rotation to this value when docked (possible: normal, right, left, inverted)
     # optional parameter
     dock_rotation: normal
+    # delay before mode switching
+    mode_delay: 2 # seconds
 
 # devices, to look for
 # usually, this should be your keyboard name

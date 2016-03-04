@@ -2,6 +2,7 @@ variables:
     debug: false
     test: false
     dock_rotation: normal
+    mode_delay: 2
 
 dock_devices:
     - HID 0911:2188
