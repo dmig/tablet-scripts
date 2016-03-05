@@ -62,8 +62,8 @@ def execute_list(lst):
             print "executed ({1}): {0}".format(cmd, ret)
 
 def action_dock():
-    if(debounce_delay) time.sleep(debounce_delay)
-    if len(dock_devices_present) = 0: return
+    if(debounce_delay): time.sleep(debounce_delay)
+    if len(dock_devices_present) == 0: return
     if debug: print "dock devices present"
     # autorotation disable and force rotation
     if not os.path.exists(home_config_directory):
@@ -77,7 +77,7 @@ def action_dock():
     execute_list(commands_dock)
 
 def action_undock():
-    if(debounce_delay) time.sleep(debounce_delay)
+    if(debounce_delay): time.sleep(debounce_delay)
     if len(dock_devices_present) > 0: return
     if debug: print "no dock devices"
     # autorotation enable
