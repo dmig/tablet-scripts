@@ -163,8 +163,6 @@ def rotate_screen(rotation):
         if not test: ret = os.system(cmd)
         if debug: print("Command: '{0}', result = {1}".format(cmd, ret))
 
-    # refresh_touch()
-
 # Config
 rotation_list = ["normal", "inverted", "right", "left"]
 device_matcher = re.compile('^.+?\\b(.+?)\\b\s+id=(\d+)\s+\[slave\s+pointer\s+\(\d+\)\]$', re.M)
@@ -195,56 +193,60 @@ if debug:
     silence = False
     print ('Scale factor: {0}'.format(scale))
 
-while True:
-    time.sleep(1.0/poll_frequency)
-    enable_rotation = not os.path.exists(home_config_directory + 'disable-autorotate')
-    force_rotation = None
-    if os.path.exists(home_config_directory + 'rotate-to'):
-        with open(home_config_directory + 'rotate-to', 'r') as f:
-            force_rotation = f.readline()
-            if not force_rotation in rotation_list: force_rotation = None
-        os.unlink(home_config_directory + 'rotate-to')
+try:
+    while True:
+        time.sleep(1.0/poll_frequency)
+        enable_rotation = not os.path.exists(home_config_directory + 'disable-autorotate')
+        force_rotation = None
+        if os.path.exists(home_config_directory + 'rotate-to'):
+            with open(home_config_directory + 'rotate-to', 'r') as f:
+                force_rotation = f.readline()
+                if not force_rotation in rotation_list: force_rotation = None
+            os.unlink(home_config_directory + 'rotate-to')
 
-    if force_rotation != None:
-        current_state = rotation_list.index(force_rotation)
-        if debug: print("Forced rotate to: {0}".format(rotation_list[current_state]))
-        rotate_screen(current_state)
-        prev_state = current_state
-
-    if not enable_rotation:
-        if debug and not silence:
-            print ('autorotation disabled')
-            silence = True
-        continue
-    elif debug:
-        silence = False
-
-    with open(accelerometer_path + '/' + 'in_accel_x_raw', 'r') as fx:
-        with open(accelerometer_path + '/' + 'in_accel_y_raw', 'r') as fy:
-            thex = float(fx.readline()) * scale
-            they = float(fy.readline()) * scale
-
-    # normal and inverted
-    if (abs(thex) < value_ignore):
-        if (they < -value_accept):
-            current_state = 0
-        if (they > value_accept):
-            current_state = 1
-    # left and right
-    if (abs(they) < value_ignore):
-        if (thex > value_accept):
-            current_state = 2
-        if (thex < -value_accept):
-            current_state = 3
-
-    if debug: print("x: %-f.1\ty: %-f.1\tcs: %d" % (thex, they, current_state))
-
-    if current_state != prev_state:
-        if rotate_delay > 0:
-            rotate_delay -= 1
-        else:
-            rotate_delay = rotate_delay_initial
-
-            if debug: print("Rotate to: {0}".format(rotation_list[current_state]))
+        if force_rotation != None:
+            current_state = rotation_list.index(force_rotation)
+            if debug: print("Forced rotate to: {0}".format(rotation_list[current_state]))
             rotate_screen(current_state)
             prev_state = current_state
+
+        if not enable_rotation:
+            if debug and not silence:
+                print ('autorotation disabled')
+                silence = True
+            continue
+        elif debug:
+            silence = False
+
+        with open(accelerometer_path + '/' + 'in_accel_x_raw', 'r') as fx:
+            with open(accelerometer_path + '/' + 'in_accel_y_raw', 'r') as fy:
+                thex = float(fx.readline()) * scale
+                they = float(fy.readline()) * scale
+
+        # normal and inverted
+        if (abs(thex) < value_ignore):
+            if (they < -value_accept):
+                current_state = 0
+            if (they > value_accept):
+                current_state = 1
+        # left and right
+        if (abs(they) < value_ignore):
+            if (thex > value_accept):
+                current_state = 2
+            if (thex < -value_accept):
+                current_state = 3
+
+        if debug: print("x: %-f.1\ty: %-f.1\tcs: %d" % (thex, they, current_state))
+
+        if current_state != prev_state:
+            if rotate_delay > 0:
+                rotate_delay -= 1
+            else:
+                rotate_delay = rotate_delay_initial
+
+                if debug: print("Rotate to: {0}".format(rotation_list[current_state]))
+                rotate_screen(current_state)
+                prev_state = current_state
+
+except KeyboardInterrupt:
+    print "Got KeyboardInterrupt, exiting..."

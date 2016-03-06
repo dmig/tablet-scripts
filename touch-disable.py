@@ -63,27 +63,31 @@ def get_proximity(device):
     if debug: print "Proximity={0}".format(val.group(1))
     return (val.group(1) == 'In')
 
-while True:
-    time.sleep(1.0/poll_frequency)
+try:
+    while True:
+        time.sleep(1.0/poll_frequency)
 
-    proximity = False
-    for pen in pen_devices:
-        proximity |= get_proximity(pen)
-    if debug: print "Pen proximity: {0}".format(proximity)
+        proximity = False
+        for pen in pen_devices:
+            proximity |= get_proximity(pen)
+        if debug: print "Pen proximity: {0}".format(proximity)
 
-    if proximity and not prev_proximity:
-        prev_proximity = proximity
-        for touch in touchscreen_devices:
-            ret = None
-            if not test: ret = os.system('xinput disable "{0}"'.format(touch))
-            if debug: print 'xinput disable "{0}" ({1})'.format(touch, ret)
-    elif not proximity and prev_proximity:
-        if enable_delay > 0:
-            enable_delay -= 1
-        else:
-            enable_delay = enable_delay_initial
+        if proximity and not prev_proximity:
             prev_proximity = proximity
             for touch in touchscreen_devices:
                 ret = None
-                if not test: ret = os.system('xinput enable "{0}"'.format(touch))
-                if debug: print 'xinput enable "{0}" ({1})'.format(touch, ret)
+                if not test: ret = os.system('xinput disable "{0}"'.format(touch))
+                if debug: print 'xinput disable "{0}" ({1})'.format(touch, ret)
+        elif not proximity and prev_proximity:
+            if enable_delay > 0:
+                enable_delay -= 1
+            else:
+                enable_delay = enable_delay_initial
+                prev_proximity = proximity
+                for touch in touchscreen_devices:
+                    ret = None
+                    if not test: ret = os.system('xinput enable "{0}"'.format(touch))
+                    if debug: print 'xinput enable "{0}" ({1})'.format(touch, ret)
+
+except KeyboardInterrupt:
+    print "Got KeyboardInterrupt, exiting..."

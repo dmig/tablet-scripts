@@ -62,7 +62,6 @@ def execute_list(lst):
             print "executed ({1}): {0}".format(cmd, ret)
 
 def action_dock():
-    if(debounce_delay): time.sleep(debounce_delay)
     if len(dock_devices_present) == 0: return
     if debug: print "dock devices present"
     # autorotation disable and force rotation
@@ -77,7 +76,6 @@ def action_dock():
     execute_list(commands_dock)
 
 def action_undock():
-    if(debounce_delay): time.sleep(debounce_delay)
     if len(dock_devices_present) > 0: return
     if debug: print "no dock devices"
     # autorotation enable
@@ -93,15 +91,23 @@ if len(dock_devices_present) > 0: action_dock()
 else: action_undock()
 
 # main cycle
-for device in iter(monitor.poll, None):
-    if not device.action in ['add', 'remove']: continue
+try:
+    for device in iter(monitor.poll, None):
+        if not device.action in ['add', 'remove']: continue
 
-    if device.action == 'remove' and device.device_path in dock_devices_present:
-        dock_devices_present.remove(device.device_path)
-        if len(dock_devices_present) == 0: action_undock()
+        if device.action == 'remove' and device.device_path in dock_devices_present:
+            dock_devices_present.remove(device.device_path)
+            if len(dock_devices_present) == 0:
+                if(debounce_delay): time.sleep(debounce_delay)
+                action_undock()
 
-    if device.action == 'add' \
-        and 'name' in device.attributes.available_attributes \
-        and device.attributes.get('name') in dock_devices:
-        dock_devices_present.append(device.device_path)
-        if len(dock_devices_present) == 1: action_dock()
+        if device.action == 'add' \
+            and 'name' in device.attributes.available_attributes \
+            and device.attributes.get('name') in dock_devices:
+            dock_devices_present.append(device.device_path)
+            if len(dock_devices_present) == 1:
+                if(debounce_delay): time.sleep(debounce_delay)
+                action_dock()
+
+except KeyboardInterrupt:
+    print "Got KeyboardInterrupt, exiting..."
