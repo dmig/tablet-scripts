@@ -13,7 +13,7 @@ These scripts assists tablets running linux to:
 autorotate.py
 ================
 
-Script for managing autorotation of the screen, all input devices and subpixel rendering.
+Script for managing autorotation of the screen, defined input devices and subpixel rendering.
 
 Configuration
 -----
@@ -28,22 +28,21 @@ variables:
     debug: false
     # do nothing, just print, what would be done
     test: false
+    # do subpixel rendering rotation
+    rotate_subpixels: true
 
 # this is your tablet screen name, get it via xrandr -q
 builtin_screen: eDP1
 
-# input devices: look for these names using xinput list,
-#  you need to add only 'slave pointer' devices
 
 # list of built-in devices (touchscreen, digitizer):
-#  those will be mapped to built-in screen
-builtin_devices:
+#  look for these names using xinput list,
+#  you need only 'slave pointer' devices;
+#  only these devices will be rotated
+rotate_devices:
     - FTSC1000:00 2808:5012
     - Wacom HID 104 Pen stylus
     - Wacom HID 104 Pen eraser
-# don't rotate those devices
-ignore_devices:
-    - Virtual core XTEST pointer
 ```
 
 Usage

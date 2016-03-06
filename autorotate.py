@@ -17,7 +17,7 @@ if config == None:
 
 try:
     config = yaml.load(file(config, 'r'))
-    for s in ['builtin_devices', 'builtin_screen']:
+    for s in ['rotate_devices', 'builtin_screen']:
         if not s in config:
             print 'Error in configuration file: `{0}` not specified'.format(s)
             exit(2)
@@ -27,8 +27,7 @@ except yaml.YAMLError, exc:
 
 # Globals
 builtin_screen = config['builtin_screen']
-builtin_devices = config['builtin_devices']
-ignore_devices = config['ignore_devices'] if 'ignore_devices' in config else []
+rotate_devices = config['rotate_devices']
 
 v = config['variables'] if 'variables' in config else {}
 # Checks per second
@@ -39,10 +38,12 @@ rotate_delay = v['rotate_delay'] if 'rotate_delay' in v else 2
 debug = v['debug'] if 'debug' in v else False
 # don't make changes to system
 test = v['test'] if 'test' in v else False
+rotate_subpixels = v['rotate_subpixels'] if 'rotate_subpixels' in v else False
 
 del v, config
 
 def get_subpixel_values(rotation):
+    if not rotate_subpixels: return None
     matrix = [
         ["rgb", "bgr", "vbgr", "vrgb"],
         ["bgr", "rgb", "vrgb", "vbgr"],
@@ -74,27 +75,6 @@ def get_rotation_state():
     else:
         return 0
 
-def get_pointer_devices():
-    output = subprocess.check_output(['xinput','list'])
-    wacom_devices = []
-    evdev_devices = []
-    other_devices = []
-
-    for dev in device_matcher.finditer(output):
-        if dev.group(1) in ignore_devices: continue
-        if dev.group(1) in builtin_devices: continue
-
-        output = subprocess.check_output(['xinput','list-props', dev.group(2)])
-
-        if wacom_matcher.search(output) != None:
-            wacom_devices.append(dev.group(2))
-        elif evdev_matcher.search(output) != None:
-            evdev_devices.append(dev.group(2))
-        else:
-            other_devices.append(dev.group(2))
-
-    return wacom_devices, evdev_devices, other_devices
-
 def find_accelerometer():
     partial_iio_path = '/sys/bus/iio/devices'
 
@@ -103,6 +83,24 @@ def find_accelerometer():
             if os.path.exists(partial_iio_path + '/' + iio_device + '/in_accel_scale'):
                 return partial_iio_path + '/' + iio_device
     return None
+
+def determine_state(x, y):
+    state = None
+    # normal and inverted
+    if (abs(x) < value_ignore):
+        if (y < -value_accept):
+            state = 0
+        if (y > value_accept):
+            state = 1
+    # left and right
+    if (abs(y) < value_ignore):
+        if (x > value_accept):
+            state = 2
+        if (x < -value_accept):
+            state = 3
+
+    if debug: print("x: %-f.1\ty: %-f.1\tcs: %d" % (x, y, state))
+    return state
 
 def rotate_screen(rotation):
     if rotation_list[rotation] == None: return
@@ -113,61 +111,27 @@ def rotate_screen(rotation):
 
     rotate_screen = "xrandr  --output {1} --rotate {0}"
     rotate_builtin = 'xinput map-to-output "{0}" {1}'
-    rotate_wacom = "xinput set-prop {0} 'Wacom Rotation' {1}"
-    rotate_evdev = "xinput set-prop {0} 'Evdev Axis Inversion' {1}; xinput set-prop {0} 'Evdev Axes Swap' {2}"
-    rotate_other = "xinput set-prop {0} 'Coordinate Transformation Matrix' '{1}'"
     rotate_subpixel = "xfconf-query -c xsettings -p /Xft/RGBA -s {0}"
 
-    if rotation == 1:
-        matrix = '-1 0 1 0 -1 1 0 0 1'
-        wacom = 3
-        evdev = (0, '1 1')
+    rotate_commands = [
+        rotate_screen.format(rotation_list[rotation], builtin_screen)
+    ]
 
-    elif rotation == 2:
-        matrix = '0 1 0 -1 0 1 0 0 1'
-        wacom = 1
-        evdev = (1, '0 1')
-
-    elif rotation == 3:
-        matrix = '0 -1 1 1 0 0 0 0 1'
-        wacom = 2
-        evdev = (1, '1 0')
-
-    else:
-        matrix = '1 0 0 0 1 0 0 0 1'
-        wacom = 0
-        evdev = (0, '0 0')
-
-    wacom_devices, evdev_devices, other_devices = get_pointer_devices()
-
-    rotate_commands = []
-    rotate_commands.append(rotate_screen.format(rotation_list[rotation], builtin_screen))
-
-    for dev in builtin_devices:
+    for dev in rotate_devices:
         rotate_commands.append(rotate_builtin.format(dev, builtin_screen))
-
-    for dev in wacom_devices:
-        rotate_commands.append(rotate_wacom.format(dev, wacom))
-
-    for dev in evdev_devices:
-        rotate_commands.append(rotate_evdev.format(dev, evdev[1], evdev[0]))
-
-    for dev in other_devices:
-        rotate_commands.append(rotate_other.format(dev, matrix))
 
     if subpixel_values != None:
         rotate_commands.append(rotate_subpixel.format(subpixel_values[rotation]))
 
     for cmd in rotate_commands:
         ret = None
-        if not test: ret = os.system(cmd)
+        if not test:
+            ret = os.system(cmd + '  2> /dev/null')
         if debug: print("Command: '{0}', result = {1}".format(cmd, ret))
 
 # Config
 rotation_list = ["normal", "inverted", "right", "left"]
-device_matcher = re.compile('^.+?\\b(.+?)\\b\s+id=(\d+)\s+\[slave\s+pointer\s+\(\d+\)\]$', re.M)
-wacom_matcher = re.compile('Wacom Rotation\s*\(\d+\):\s+\d', re.I)
-evdev_matcher = re.compile('Evdev Axis Inversion\s*\(\d+\):\s+\d,\s*\d', re.I)
+
 # TODO test and change values to appropriate
 value_ignore = 3
 value_accept = 6
@@ -223,20 +187,8 @@ try:
                 thex = float(fx.readline()) * scale
                 they = float(fy.readline()) * scale
 
-        # normal and inverted
-        if (abs(thex) < value_ignore):
-            if (they < -value_accept):
-                current_state = 0
-            if (they > value_accept):
-                current_state = 1
-        # left and right
-        if (abs(they) < value_ignore):
-            if (thex > value_accept):
-                current_state = 2
-            if (thex < -value_accept):
-                current_state = 3
-
-        if debug: print("x: %-f.1\ty: %-f.1\tcs: %d" % (thex, they, current_state))
+        s = determine_state(thex, they)
+        if s != None: current_state = s
 
         if current_state != prev_state:
             if rotate_delay > 0:
