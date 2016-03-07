@@ -1,5 +1,4 @@
 variables:
-    poll_frequency: 2
     enable_delay: 1
     debug: False
     test: False

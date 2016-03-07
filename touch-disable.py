@@ -1,6 +1,8 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8
-import time, os, subprocess, re, yaml
+import time, os, subprocess, re, yaml, evdev
+from select import select
+from threading import Timer
 from xdg import BaseDirectory
 
 home_config_directory = BaseDirectory.xdg_config_home + '/tablet-scripts/'
@@ -29,9 +31,11 @@ except yaml.YAMLError, exc:
 pen_devices = config['pen_devices']
 touchscreen_devices = config['touchscreen_devices']
 
+if len(pen_devices) == 0:
+    print ('No pen devices specified, exiting')
+    exit(0)
+
 v = config['variables'] if 'variables' in config else {}
-# Checks per second
-poll_frequency = v['poll_frequency'] if 'poll_frequency' in v else 2
 # wait seconds before enable
 enable_delay = v['enable_delay'] if 'enable_delay' in v else 2
 # emit debug messages
@@ -42,52 +46,71 @@ test = v['test'] if 'test' in v else False
 del v, config
 
 # Config
-proximity_matcher = re.compile('Proximity=(In|Out)$', re.M)
+device_nodes = []
+
+matcher = re.compile('Device Node\s*\(\d+\):\s+"(.+?)"', re.I)
+for dev in pen_devices:
+    try:
+        output = subprocess.check_output(['xinput','list-props', dev])
+    except subprocess.CalledProcessError:
+        continue
+
+    node = matcher.search(output)
+    if node != None:
+        device_nodes.append(node.group(1))
+
+device_nodes = list(set(device_nodes))
+try:
+    devices = map(evdev.InputDevice, device_nodes)
+except OSError, err:
+    print(err)
+    exit(1)
+devices = {dev.fd: dev for dev in devices}
+
+del device_nodes, matcher, pen_devices
+
+def disable_touchscreen():
+    global touch_disabled
+    touch_disabled = True
+
+    for touch in touchscreen_devices:
+        ret = None
+        if not test: ret = os.system('xinput disable "{0}"'.format(touch))
+        if debug: print 'xinput disable "{0}" ({1})'.format(touch, ret)
+
+def enable_touchscreen():
+    global touch_disabled
+    touch_disabled = False
+
+    for device in touchscreen_devices:
+        ret = None
+        if not test: ret = os.system('xinput enable "{0}"'.format(device))
+        if debug: print 'xinput enable "{0}" ({1})'.format(device, ret)
 
 # Initialization
-enable_delay_initial = enable_delay = enable_delay * poll_frequency
-prev_proximity = False
-
-def get_proximity(device):
-    try:
-        output = subprocess.check_output(['xinput', 'query-state', device])
-    except subprocess.CalledProcessError, e:
-        if debug: print 'Proximity query error: {0}\n{1}'.format(e.returncode, e.output)
-        return False
-
-    val = proximity_matcher.search(output)
-    if val == None:
-        if debug: print "Failed to determine proximity"
-        return False
-
-    if debug: print "Proximity={0}".format(val.group(1))
-    return (val.group(1) == 'In')
+touch_disabled = False
+timer = None
 
 try:
     while True:
-        time.sleep(1.0/poll_frequency)
+        r, w, x = select(devices,[],[])
+        got_event = False
+        for fd in r:
+            for event in devices[fd].read():
+                if (event.type == evdev.ecodes.EV_KEY and \
+                    event.code in [evdev.ecodes.BTN_TOOL_PEN, evdev.ecodes.BTN_TOOL_RUBBER]):
+                    proximity = (event.value == evdev.KeyEvent.key_down)
+                    got_event = True
 
-        proximity = False
-        for pen in pen_devices:
-            proximity |= get_proximity(pen)
-        if debug: print "Pen proximity: {0}".format(proximity)
+        if not got_event: continue
 
-        if proximity and not prev_proximity:
-            prev_proximity = proximity
-            for touch in touchscreen_devices:
-                ret = None
-                if not test: ret = os.system('xinput disable "{0}"'.format(touch))
-                if debug: print 'xinput disable "{0}" ({1})'.format(touch, ret)
-        elif not proximity and prev_proximity:
-            if enable_delay > 0:
-                enable_delay -= 1
-            else:
-                enable_delay = enable_delay_initial
-                prev_proximity = proximity
-                for touch in touchscreen_devices:
-                    ret = None
-                    if not test: ret = os.system('xinput enable "{0}"'.format(touch))
-                    if debug: print 'xinput enable "{0}" ({1})'.format(touch, ret)
+        if debug: print('Pen proximity: {0}'.format(proximity))
+        if proximity:
+            if timer: timer.cancel()
+            if not touch_disabled: disable_touchscreen()
+        elif not proximity and not (timer and timer.is_alive()):
+            timer = Timer(enable_delay, enable_touchscreen)
+            timer.start()
 
 except KeyboardInterrupt:
     print "Got KeyboardInterrupt, exiting..."
