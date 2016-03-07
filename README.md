@@ -1,14 +1,51 @@
 Tablet Scripts
 ================
 
-This repository was forked from https://github.com/simonwjackson/surface-pro-3-scripts, but scripts were completely rewritten, keeping original code ideas in better form.
+This repository was initially forked from https://github.com/simonwjackson/surface-pro-3-scripts, but scripts were completely rewritten, keeping original code ideas in better form.
 
 These scripts assists tablets running linux to:
 
-* Autorotate based on device orentation of internal screen, all input devices and subpixel rendering
+* Autorotate based on device orientation of internal screen, all input devices and subpixel rendering
 * Automatically switch "tablet-mode" on or off, depending on presence of dock devices
+* Disable touch screen, when pen is in screen proximity
 * ... more to add
 
+Installation
+================
+1. install dependencies:
+```shell
+$ sudo apt-get install python-pip
+$ pip install pyudev evdev pyyaml pyxdg
+```
+2. get the code: `git clone https://github.com/dmig/tablet-scripts.git` or download https://github.com/dmig/tablet-scripts/archive/master.zip and unpack it
+3. create directories:
+```shell
+$ mkdir -p ~/bin
+$ mkdir -p ~/.config/tablet-scripts
+```
+4. copy files:
+```shell
+$ cp *yaml ~/.config/tablet-scripts
+$ cp *py ~/bin
+```
+5. configure scripts: edit `~/.config/tablet-scripts/*yaml`
+6. run them
+
+*Notice:* if you see `[Errno 13] Permission denied: '/dev/input/event13'` from `touch-disable.py`:
+1. check device permissions:
+```shell
+$ ls -l /dev/input/event13
+crw-rw---- 1 root input 13, 77 марта  7 10:46 /dev/input/event13
+```
+2. if device group is `root` or group permissions doesn't contain `r`, you have to add udev rule:
+```shell
+$ echo SUBSYSTEM=="input", GROUP="input", MODE="0660" | sudo tee /etc/udev/99-input-devices.rules
+```
+3. make sure, you have appropriate group assigned (`input` in this case, see #1):
+```shell
+sudo usermod -aG input $USER
+```
+4. logout and login again
 
 autorotate.py
 ================
@@ -114,7 +151,7 @@ $ tablet-mode.py
 touch-disable.py
 ================
 
-Simple script for enabling/disabling touchscreen depending on pen proximity. Useful, if you often touch the screen with your palm when using pen. This one is most cpu intensive, so don't run, if you don't really need it.
+Simple script for enabling/disabling touchscreen depending on pen proximity. Useful, if you often touch the screen with your palm when using pen. Notice: you need read permission for `/dev/input/*` to run ths script.
 
 Configuration
 -----
@@ -125,8 +162,6 @@ variables:
     debug: false
     # do nothing, just print, what would be done
     test: false
-    # frequency of devices state polling
-    poll_frequency: 2 # times per second
     # delay before enable back touchscreen
     enable_delay: 1 # seconds
 
@@ -155,4 +190,5 @@ TODO
 * Get/set Xft.RGBA in less desktop-specific way (lib binging maybe?)
 * Webcam rotation (if ever possible)
 * Reduce number of subprocess calls by using bindings to xrandr (https://github.com/alexer/python-xlib/blob/master/examples/xrandr.py) and xinput
-* Find a way to determine pen proximity without subprocess calls
+* Installer
+* Test on different devices
